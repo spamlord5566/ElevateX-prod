@@ -106,7 +106,7 @@ function PaymentReview({ data, fee, paymentFile, errors, onFileChange, onSubmit,
       <div className={styles.qrBlock}>
         <p className={styles.qrTitle}>Payment</p>
         <p className={styles.helper}>Scan the QR code below using Google Pay and complete the payment.</p>
-        <img src="/images/gpay-qr.jpg" alt="Google Pay QR code" className={styles.qrImage} />
+        <img src="/images/elevateXpic.jpeg" alt="Google Pay QR code"  width={250} height={250}  className={styles.qrImage}/>
       </div>
 
       <div className={styles.uploadBlock}>
