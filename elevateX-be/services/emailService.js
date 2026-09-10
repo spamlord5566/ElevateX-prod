@@ -1,26 +1,49 @@
 const fs = require('fs');
 const path = require('path');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
 const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@elevatex.in';
-const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com';
-const smtpPort = Number(process.env.SMTP_PORT || process.env.EMAIL_PORT || 587);
-const smtpUser = (process.env.SMTP_USER || process.env.EMAIL_USER || '').trim();
-const smtpPass = (process.env.SMTP_PASS || process.env.EMAIL_PASSWORD || '').trim();
-const smtpConfigured = Boolean(smtpHost && smtpUser && smtpPass);
 
-const transporter = smtpConfigured
-  ? nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      family: 4,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-    })
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
   : null;
+
+const sendEmail = async ({ to, subject, text, html, attachments }) => {
+  if (!resend) {
+    console.error('[EmailService] RESEND_API_KEY is not configured.');
+    return false;
+  }
+
+  try {
+    const emailData = {
+      from: EMAIL_FROM,
+      to,
+      subject,
+      text,
+      html,
+    };
+
+    if (attachments && attachments.length > 0) {
+      emailData.attachments = attachments.map((attachment) => ({
+        filename: attachment.filename,
+        path: attachment.path,
+      }));
+    }
+
+    const { data, error } = await resend.emails.send(emailData);
+
+    if (error) {
+      console.error('[EmailService] Resend send failed:', error);
+      return false;
+    }
+
+    console.log('[EmailService] Email sent:', data?.id);
+    return Boolean(data?.id);
+  } catch (error) {
+    console.error('[EmailService] Resend error:', error);
+    return false;
+  }
+};
 
 const getParticipantEmails = (registration) => {
   return registration.email ? [registration.email] : [];
@@ -29,6 +52,7 @@ const getParticipantEmails = (registration) => {
 const buildAttachment = (registration) => {
   const screenshot = registration.paymentScreenshot;
   const filePath = screenshot && screenshot.path ? screenshot.path : null;
+
   if (!filePath || !fs.existsSync(filePath)) {
     return null;
   }
@@ -38,35 +62,6 @@ const buildAttachment = (registration) => {
     path: filePath,
     contentType: screenshot.mimeType || 'application/octet-stream',
   };
-};
-
-const sendEmail = async ({ to, subject, text, html, attachments }) => {
-  if (!transporter) {
-    console.error('[EmailService] SMTP is not configured. Email was not sent.', {
-      to,
-      subject,
-      smtpHost,
-      smtpUser: smtpUser ? 'configured' : 'missing',
-      smtpPass: smtpPass ? 'configured' : 'missing',
-    });
-    return false;
-  }
-
-  try {
-    const info = await transporter.sendMail({
-      from: EMAIL_FROM,
-      to: to.join(', '),
-      subject,
-      text,
-      html,
-      attachments,
-    });
-
-    return Boolean(info && info.messageId);
-  } catch (error) {
-    console.error('[EmailService] Nodemailer sendMail failed:', error);
-    return false;
-  }
 };
 
 const sendVerificationEmail = async (registration) => {
